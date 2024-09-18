@@ -20,7 +20,7 @@ setup(
     install_requires=[
         "addict",
         "retrying",
-        "pydantic",
+        "jsonschema",
         "guolei-py3-requests",
         "xmltodict",
         "beautifulsoup4",
