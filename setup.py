@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 setup(
     name="guolei-py3-zkhb",
-    version="0.0.1",
+    version="1.1.1",
     description="中科华博 API",
     long_description=long_description,
     long_description_content_type="text/markdown",
