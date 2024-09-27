@@ -17,6 +17,7 @@ from addict import Dict
 from bs4 import BeautifulSoup
 from jsonschema import validate
 from jsonschema.validators import Draft202012Validator
+from lxml.parser import result
 
 
 class ApiUrlSettings:
@@ -70,21 +71,8 @@ class Api(object):
         if isinstance(custom_callable, Callable):
             return custom_callable(response)
         if response.status_code == 200:
-            print(response.json())
-            json_addict = Dict(response.json())
-            if Draft202012Validator({
-                "type": "object",
-                "properties": {
-                    "Result": {
-                        "type": "string",
-                        "minLength": 1,
-                        "const": "succ"
-                    }
-                },
-                "required": ["Result"]
-            }).is_valid(json_addict):
-                return True
-        return False
+            return response.text
+        return None
 
     def request(
             self,
@@ -119,71 +107,37 @@ class Api(object):
         if isinstance(custom_callable, Callable):
             return custom_callable(response)
         if response.status_code == 200:
-            json_addict = Dict(response.json())
-            if Draft202012Validator({
-                "type": "object",
-                "properties": {
-                    "Result": {
-                        "type": "string",
-                        "minLength": 1,
-                        "const": "succ"
-                    }
-                },
-                "required": ["Result"]
-            }).is_valid(json_addict):
-                return True
-        return False
+            return response.text
+        return None
 
-    def call_get_dataset(
+    def get_data_set(
             self,
-            request_func_kwargs_data_sql: str = "",
-            request_func_kwargs_data_url: str = "",
-            request_func_kwargs: dict = {},
-            request_func_response_callable: Callable = None
+            url: str = None,
+            sql: str = None,
+            kwargs: dict = None,
     ):
-        validate(instance=request_func_kwargs_data_sql, schema={"type": "string", "minLength": 1, "format": "uri"})
-        validate(instance=request_func_kwargs_data_url, schema={"type": "string", "format": "uri"})
-        if not Draft202012Validator({"type": "boolean", "const": True}).is_valid(isinstance(request_func_kwargs, dict)):
-            request_func_kwargs = {}
-        request_func_kwargs = Dict(request_func_kwargs)
-        request_func_kwargs.setdefault("url", f"{self.url}")
-        request_func_kwargs.setdefault("method", "POST")
-        request_func_kwargs.setdefault("headers", Dict())
-        request_func_kwargs.headers.setdefault("Content-Type", "text/xml; charset=utf-8")
-        request_func_kwargs.setdefault(
-            "data",
-            xmltodict.unparse(
-                {
-                    "soap:Envelope": {
-                        "@xmlns:soap": "http://schemas.xmlsoap.org/soap/envelope/",
-                        "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
-                        "@xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
-                        "soap:Body": {
-                            "GetDataSet": {
-                                "@xmlns": "http://zkhb.com.cn/",
-                                "sql": request_func_kwargs_data_sql,
-                                "url": request_func_kwargs_data_url,
-                            }
+        kwargs = Dict(kwargs) if isinstance(kwargs, dict) else Dict()
+        kwargs.headers.setdefault("Content-Type", "text/xml; charset=utf-8")
+        data = xmltodict.unparse(
+            {
+                "soap:Envelope": {
+                    "@xmlns:soap": "http://schemas.xmlsoap.org/soap/envelope/",
+                    "@xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                    "@xmlns:xsd": "http://www.w3.org/2001/XMLSchema",
+                    "soap:Body": {
+                        "GetDataSet": {
+                            "@xmlns": "http://zkhb.com.cn/",
+                            "sql": sql,
                         }
                     }
                 }
-            )
+            }
         )
-        response = requests.request(**request_func_kwargs.to_dict())
-        if Draft202012Validator({"type": "boolean", "const": True}).is_valid(
-                isinstance(request_func_response_callable, Callable)):
-            return request_func_response_callable(response, request_func_kwargs)
-        if response.status_code == 200:
-            if Draft202012Validator({"type": "string", "minLength": 1}).is_valid(response.text):
-                if not isinstance(BeautifulSoup(response.text, "xml").find("NewDataSet"), NoneType):
-                    results = Dict(
-                        xmltodict.parse(
-                            BeautifulSoup(response.text, "xml").find("NewDataSet").encode("utf-8"))
-                    ).NewDataSet.Table
-                    if not isinstance(results, list):
-                        results = [results]
-                    return [Dict(i) for i in results]
-        return []
+        return self.post(
+            url=url,
+            data=data,
+            kwargs=kwargs
+        )
 
     def query_actual_charge_list(
             self,
@@ -191,7 +145,7 @@ class Api(object):
             types: str = "",
             room_no: str = "",
             end_date: str = "",
-            call_get_dataset_func_kwargs: dict = {},
+            kwargs: dict = None,
     ):
         """
         查询实际缴费列表
@@ -199,7 +153,7 @@ class Api(object):
         :param types: 缴费类型
         :param room_no: 房间号
         :param end_date: 结束日期
-        :param call_get_dataset_func_kwargs: call_get_dataset(**call_get_dataset_func_kwargs)
+        :param kwargs:
         :return:
         """
         validate(instance=estate_id,
@@ -207,10 +161,6 @@ class Api(object):
         validate(instance=types, schema={"type": "string", "minLength": 1})
         validate(instance=room_no, schema={"type": "string", "minLength": 1})
         validate(instance=end_date, schema={"type": "string", "minLength": 1, "format": "date-time"})
-        if not Draft202012Validator({"type": "boolean", "const": True}).is_valid(
-                isinstance(call_get_dataset_func_kwargs, dict)):
-            call_get_dataset_func_kwargs = {}
-        call_get_dataset_func_kwargs = Dict(call_get_dataset_func_kwargs)
         sql = f"""select
                     cml.ChargeMListID,
                     cml.ChargeMListNo,
@@ -245,5 +195,19 @@ class Api(object):
                     (cml.EstateID={estate_id} and cbi.ItemName='{types}' and rd.RmNo='{room_no}' and cfi.EDate>='{end_date}')
                 order by cfi.ChargeFeeItemID desc;
             """
-        call_get_dataset_func_kwargs.setdefault("request_func_kwargs_data_sql", sql)
-        return self.call_get_dataset(**call_get_dataset_func_kwargs.to_dict())
+        result = self.get_data_set(
+            url=ApiUrlSettings.URL__ESTATE__WEBSERVICE__FORCELANDESTATESERVICE,
+            sql=sql,
+            kwargs=kwargs
+        )
+        if Draft202012Validator({"type": "string", "minLength": 1}).is_valid(result):
+            if not isinstance(BeautifulSoup(result, "xml").find("NewDataSet"), NoneType):
+                results = Dict(
+                    xmltodict.parse(
+                        BeautifulSoup(result, "xml").find("NewDataSet").encode("utf-8")
+                    )
+                ).NewDataSet.Table
+                if not isinstance(results, list):
+                    results = [results]
+                return [Dict(i) for i in results]
+        return []
