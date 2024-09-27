@@ -17,11 +17,10 @@ from addict import Dict
 from bs4 import BeautifulSoup
 from jsonschema import validate
 from jsonschema.validators import Draft202012Validator
-from lxml.parser import result
 
 
 class ApiUrlSettings:
-    URL__ESTATE__WEBSERVICE__FORCELANDESTATESERVICE = "/estate/webService/ForcelandEstateService.asmx"
+    URL__GET_DATA_SET = "/estate/webService/ForcelandEstateService.asmx?op=GetDataSet"
 
 
 class Api(object):
@@ -112,7 +111,7 @@ class Api(object):
 
     def get_data_set(
             self,
-            url: str = None,
+            url: str = ApiUrlSettings.URL__GET_DATA_SET,
             sql: str = None,
             kwargs: dict = None,
     ):
@@ -128,6 +127,7 @@ class Api(object):
                         "GetDataSet": {
                             "@xmlns": "http://zkhb.com.cn/",
                             "sql": sql,
+                            "url": "",
                         }
                     }
                 }
@@ -195,16 +195,16 @@ class Api(object):
                     (cml.EstateID={estate_id} and cbi.ItemName='{types}' and rd.RmNo='{room_no}' and cfi.EDate>='{end_date}')
                 order by cfi.ChargeFeeItemID desc;
             """
-        result = self.get_data_set(
-            url=ApiUrlSettings.URL__ESTATE__WEBSERVICE__FORCELANDESTATESERVICE,
+        text = self.get_data_set(
+            url=ApiUrlSettings.URL__GET_DATA_SET,
             sql=sql,
             kwargs=kwargs
         )
-        if Draft202012Validator({"type": "string", "minLength": 1}).is_valid(result):
-            if not isinstance(BeautifulSoup(result, "xml").find("NewDataSet"), NoneType):
+        if Draft202012Validator({"type": "string", "minLength": 1}).is_valid(text):
+            if not isinstance(BeautifulSoup(text, "xml").find("NewDataSet"), NoneType):
                 results = Dict(
                     xmltodict.parse(
-                        BeautifulSoup(result, "xml").find("NewDataSet").encode("utf-8")
+                        BeautifulSoup(text, "xml").find("NewDataSet").encode("utf-8")
                     )
                 ).NewDataSet.Table
                 if not isinstance(results, list):
