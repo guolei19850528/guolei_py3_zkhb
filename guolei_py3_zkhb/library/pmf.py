@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: UTF-8 -*-
+"""
+=================================================
+作者：[郭磊]
+手机：[15210720528]
+Email：[174000902@qq.com]
+Github：https://github.com/guolei19850528/guolei_py3_zkhb
+=================================================
+"""
 from types import NoneType
 from typing import Callable, Union
 
@@ -11,22 +19,120 @@ from jsonschema import validate
 from jsonschema.validators import Draft202012Validator
 
 
+class ApiUrlSettings:
+    URL__ESTATE__WEBSERVICE__FORCELANDESTATESERVICE = "/estate/webService/ForcelandEstateService.asmx"
+
+
 class Api(object):
     """
     中科华博物管收费系统API Class
     """
 
-    def __init__(self, url: str = ""):
-        validate(instance=url, schema={"type": "string", "minLength": 1, "format": "uri"})
-        self._url = url
+    def __init__(self, base_url: str = ""):
+        self._base_url = base_url
 
     @property
-    def url(self):
-        return self._url[:-1] if self._url.endswith("/") else self._url
+    def base_url(self):
+        return self._base_url[:-1] if self._base_url.endswith("/") else self._base_url
 
-    @url.setter
-    def url(self, url: str):
-        self._url = url
+    @base_url.setter
+    def base_url(self, base_url: str):
+        self._base_url = base_url
+
+    def post(
+            self,
+            url: str = "",
+            params: dict = None,
+            data: dict = None,
+            kwargs: dict = None,
+            custom_callable: Callable = None
+    ):
+        """
+        use requests.post
+        :param url: requests.post(url=url,params=params,data=data,**kwargs) url=base_url+url if not pattern ^http else url
+        :param params: requests.post(url=url,params=params,data=data,**kwargs)
+        :param data: requests.post(url=url,params=params,data=data,**kwargs)
+        :param kwargs: requests.post(url=url,params=params,data=data,**kwargs)
+        :param custom_callable: custom_callable(response) if isinstance(custom_callable,Callable)
+        :return:custom_callable(response) if isinstance(custom_callable,Callable) else addict.Dict instance
+        """
+        if not Draft202012Validator({"type": "string", "minLength": 1, "pattern": "^http"}).is_valid(url):
+            url = f"/{url}" if not url.startswith("/") else url
+            url = f"{self.base_url}{url}"
+
+        kwargs = Dict(kwargs) if isinstance(kwargs, dict) else Dict()
+        response = requests.post(
+            url=url,
+            params=params,
+            data=data,
+            **kwargs.to_dict()
+        )
+        if isinstance(custom_callable, Callable):
+            return custom_callable(response)
+        if response.status_code == 200:
+            print(response.json())
+            json_addict = Dict(response.json())
+            if Draft202012Validator({
+                "type": "object",
+                "properties": {
+                    "Result": {
+                        "type": "string",
+                        "minLength": 1,
+                        "const": "succ"
+                    }
+                },
+                "required": ["Result"]
+            }).is_valid(json_addict):
+                return True
+        return False
+
+    def request(
+            self,
+            method: str = "GET",
+            url: str = "",
+            params: dict = None,
+            data: dict = None,
+            kwargs: dict = None,
+            custom_callable: Callable = None
+    ):
+        """
+        use requests.request
+        :param method: requests.request(method=method,url=url,params=params,data=data,**kwargs)
+        :param url: requests.request(method=method,url=url,params=params,data=data,**kwargs) url=base_url+url if not pattern ^http else url
+        :param params: requests.request(method=method,url=url,params=params,data=data,**kwargs)
+        :param data: requests.request(method=method,url=url,params=params,data=data,**kwargs)
+        :param kwargs: requests.request(method=method,url=url,params=params,data=data,**kwargs)
+        :param custom_callable: custom_callable(response) if isinstance(custom_callable,Callable)
+        :return:custom_callable(response) if isinstance(custom_callable,Callable) else addict.Dict instance
+        """
+        if not Draft202012Validator({"type": "string", "minLength": 1, "pattern": "^http"}).is_valid(url):
+            url = f"/{url}" if not url.startswith("/") else url
+            url = f"{self.base_url}{url}"
+        kwargs = Dict(kwargs) if isinstance(kwargs, dict) else Dict()
+        response = requests.request(
+            method=method,
+            url=url,
+            params=params,
+            data=data,
+            **kwargs.to_dict()
+        )
+        if isinstance(custom_callable, Callable):
+            return custom_callable(response)
+        if response.status_code == 200:
+            json_addict = Dict(response.json())
+            if Draft202012Validator({
+                "type": "object",
+                "properties": {
+                    "Result": {
+                        "type": "string",
+                        "minLength": 1,
+                        "const": "succ"
+                    }
+                },
+                "required": ["Result"]
+            }).is_valid(json_addict):
+                return True
+        return False
 
     def call_get_dataset(
             self,
