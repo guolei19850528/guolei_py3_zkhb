@@ -7,7 +7,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 setup(
     name="guolei-py3-zkhb",
-    version="1.1.1",
+    version="2.0.0",
     description="中科华博 API",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -18,10 +18,10 @@ setup(
     keywors=["中科华博", "zkhb"],
     packages=setuptools.find_packages('./'),
     install_requires=[
+        "guolei-py3-requests",
         "addict",
         "retrying",
         "jsonschema",
-        "guolei-py3-requests",
         "xmltodict",
         "beautifulsoup4",
         "lxml"
