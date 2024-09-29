@@ -9,18 +9,51 @@ Github：https://github.com/guolei19850528/guolei_py3_zkhb
 =================================================
 """
 from types import NoneType
-from typing import Callable, Union
+from typing import Callable, Union, Any, Sequence
 
-import requests
 import xmltodict
 from addict import Dict
 from bs4 import BeautifulSoup
-from jsonschema import validate
+from guolei_py3_requests.library import ResponseCallable, request
 from jsonschema.validators import Draft202012Validator
+from requests import Response
 
 
-class ApiUrlSettings:
-    URL__GET_DATA_SET = "/estate/webService/ForcelandEstateService.asmx?op=GetDataSet"
+class ResponseCallable(ResponseCallable):
+    """
+    Response Callable Class
+    """
+
+    @staticmethod
+    def text_xml(response: Response = None, status_code: int = 200, features: Union[str, Sequence[str]] = "xml"):
+        return BeautifulSoup(
+            ResponseCallable.text(response=response, status_code=status_code),
+            features="xml"
+        )
+
+    @staticmethod
+    def text_xml__new_data_set__table(
+            response: Response = None,
+            status_code: int = 200,
+            features: Union[str, Sequence[str]] = "xml"
+    ):
+        text_xml = ResponseCallable.text_xml(response=response, status_code=status_code, features=features)
+        if isinstance(text_xml, NoneType):
+            return []
+        results = Dict(
+            xmltodict.parse(
+                text_xml.find("NewDataSet").encode(
+                    "utf-8"))
+        ).NewDataSet.Table
+        if isinstance(results, list):
+            return results
+        if isinstance(results, dict) and len(results.keys()):
+            return [results]
+        return []
+
+
+class UrlsSetting:
+    GET_DATA_SET = "/estate/webService/ForcelandEstateService.asmx?op=GetDataSet"
 
 
 class Api(object):
@@ -41,82 +74,51 @@ class Api(object):
 
     def post(
             self,
-            url: str = "",
-            params: dict = None,
-            data: dict = None,
-            kwargs: dict = None,
-            custom_callable: Callable = None
+            response_callable: Callable = ResponseCallable.text_xml__new_data_set__table,
+            url: str = None,
+            params: Any = None,
+            data: Any = None,
+            json: Any = None,
+            headers: Any = None,
+            **kwargs: Any
     ):
-        """
-        use requests.post
-        :param url: requests.post(url=url,params=params,data=data,**kwargs) url=base_url+url if not pattern ^http else url
-        :param params: requests.post(url=url,params=params,data=data,**kwargs)
-        :param data: requests.post(url=url,params=params,data=data,**kwargs)
-        :param kwargs: requests.post(url=url,params=params,data=data,**kwargs)
-        :param custom_callable: custom_callable(response) if isinstance(custom_callable,Callable)
-        :return:custom_callable(response) if isinstance(custom_callable,Callable) else addict.Dict instance
-        """
-        if not Draft202012Validator({"type": "string", "minLength": 1, "pattern": "^http"}).is_valid(url):
-            url = f"/{url}" if not url.startswith("/") else url
-            url = f"{self.base_url}{url}"
-
-        kwargs = Dict(kwargs) if isinstance(kwargs, dict) else Dict()
-        response = requests.post(
+        return self.request(
+            response_callable=response_callable,
+            method="POST",
             url=url,
             params=params,
             data=data,
-            **kwargs.to_dict()
+            json=json,
+            headers=headers,
+            **kwargs
         )
-        if isinstance(custom_callable, Callable):
-            return custom_callable(response)
-        if response.status_code == 200:
-            return response.text
-        return None
 
     def request(
             self,
+            response_callable: Callable = ResponseCallable.text_xml__new_data_set__table,
             method: str = "GET",
-            url: str = "",
-            params: dict = None,
-            data: dict = None,
-            kwargs: dict = None,
-            custom_callable: Callable = None
+            url: str = None,
+            params: Any = None,
+            headers: Any = None,
+            **kwargs
     ):
-        """
-        use requests.request
-        :param method: requests.request(method=method,url=url,params=params,data=data,**kwargs)
-        :param url: requests.request(method=method,url=url,params=params,data=data,**kwargs) url=base_url+url if not pattern ^http else url
-        :param params: requests.request(method=method,url=url,params=params,data=data,**kwargs)
-        :param data: requests.request(method=method,url=url,params=params,data=data,**kwargs)
-        :param kwargs: requests.request(method=method,url=url,params=params,data=data,**kwargs)
-        :param custom_callable: custom_callable(response) if isinstance(custom_callable,Callable)
-        :return:custom_callable(response) if isinstance(custom_callable,Callable) else addict.Dict instance
-        """
         if not Draft202012Validator({"type": "string", "minLength": 1, "pattern": "^http"}).is_valid(url):
             url = f"/{url}" if not url.startswith("/") else url
             url = f"{self.base_url}{url}"
-        kwargs = Dict(kwargs) if isinstance(kwargs, dict) else Dict()
-        response = requests.request(
+        return request(
+            response_callable=response_callable,
             method=method,
             url=url,
             params=params,
-            data=data,
-            **kwargs.to_dict()
+            headers=headers,
+            **kwargs
         )
-        if isinstance(custom_callable, Callable):
-            return custom_callable(response)
-        if response.status_code == 200:
-            return response.text
-        return None
 
     def get_data_set(
-            self,
-            url: str = ApiUrlSettings.URL__GET_DATA_SET,
-            sql: str = None,
-            kwargs: dict = None,
+            self, sql: str = None,
+            url: str = None,
+            response_callable: Callable = ResponseCallable.text_xml__new_data_set__table
     ):
-        kwargs = Dict(kwargs) if isinstance(kwargs, dict) else Dict()
-        kwargs.headers.setdefault("Content-Type", "text/xml; charset=utf-8")
         data = xmltodict.unparse(
             {
                 "soap:Envelope": {
@@ -126,17 +128,18 @@ class Api(object):
                     "soap:Body": {
                         "GetDataSet": {
                             "@xmlns": "http://zkhb.com.cn/",
-                            "sql": sql,
-                            "url": "",
+                            "sql": f"{sql}",
+                            "url": f"{url}",
                         }
                     }
                 }
             }
         )
         return self.post(
-            url=url,
+            response_callable=response_callable,
+            url=UrlsSetting.GET_DATA_SET,
             data=data,
-            kwargs=kwargs
+            headers={"Content-Type": "text/xml; charset=utf-8"}
         )
 
     def query_actual_charge_list(
@@ -144,70 +147,47 @@ class Api(object):
             estate_id: Union[int, str] = 0,
             types: str = "",
             room_no: str = "",
-            end_date: str = "",
-            kwargs: dict = None,
-    ):
+            end_date: str = ""
+    ) -> list:
         """
-        查询实际缴费列表
         :param estate_id: 项目ID
-        :param types: 缴费类型
+        :param types: 收费类型
         :param room_no: 房间号
         :param end_date: 结束日期
-        :param kwargs:
         :return:
         """
-        validate(instance=estate_id,
-                 schema={"oneOf": [{"type": "string", "minLength": 1}, {"type": "integer", "minimum": 1}]})
-        validate(instance=types, schema={"type": "string", "minLength": 1})
-        validate(instance=room_no, schema={"type": "string", "minLength": 1})
-        validate(instance=end_date, schema={"type": "string", "minLength": 1, "format": "date-time"})
         sql = f"""select
-                    cml.ChargeMListID,
-                    cml.ChargeMListNo,
-                    cml.ChargeTime,
-                    cml.PayerName,
-                    cml.ChargePersonName,
-                    cml.ActualPayMoney,
-                    cml.EstateID,
-                    cml.ItemNames,
-                    ed.Caption as EstateName,
-                    cfi.ChargeFeeItemID,
-                    cfi.ActualAmount,
-                    cfi.SDate,
-                    cfi.EDate,
-                    cfi.RmId,
-                    rd.RmNo,
-                    cml.CreateTime,
-                    cml.LastUpdateTime,
-                    cbi.ItemName,
-                    cbi.IsPayFull
-                from
-                    chargeMasterList cml,EstateDetail ed,ChargeFeeItem cfi,RoomDetail rd,ChargeBillItem cbi
-                where
-                    cml.EstateID=ed.EstateID
-                    and
-                    cml.ChargeMListID=cfi.ChargeMListID
-                    and
-                    cfi.RmId=rd.RmId
-                    and
-                    cfi.CBillItemID=cbi.CBillItemID
-                    and
-                    (cml.EstateID={estate_id} and cbi.ItemName='{types}' and rd.RmNo='{room_no}' and cfi.EDate>='{end_date}')
-                order by cfi.ChargeFeeItemID desc;
-            """
-        text = self.get_data_set(
-            url=ApiUrlSettings.URL__GET_DATA_SET,
-            sql=sql,
-            kwargs=kwargs
-        )
-        if Draft202012Validator({"type": "string", "minLength": 1}).is_valid(text):
-            if not isinstance(BeautifulSoup(text, "xml").find("NewDataSet"), NoneType):
-                results = Dict(
-                    xmltodict.parse(
-                        BeautifulSoup(text, "xml").find("NewDataSet").encode("utf-8")
-                    )
-                ).NewDataSet.Table
-                if not isinstance(results, list):
-                    results = [results]
-                return [Dict(i) for i in results]
-        return []
+            cml.ChargeMListID,
+            cml.ChargeMListNo,
+            cml.ChargeTime,
+            cml.PayerName,
+            cml.ChargePersonName,
+            cml.ActualPayMoney,
+            cml.EstateID,
+            cml.ItemNames,
+            ed.Caption as EstateName,
+            cfi.ChargeFeeItemID,
+            cfi.ActualAmount,
+            cfi.SDate,
+            cfi.EDate,
+            cfi.RmId,
+            rd.RmNo,
+            cml.CreateTime,
+            cml.LastUpdateTime,
+            cbi.ItemName,
+            cbi.IsPayFull
+        from
+            chargeMasterList cml,EstateDetail ed,ChargeFeeItem cfi,RoomDetail rd,ChargeBillItem cbi
+        where
+            cml.EstateID=ed.EstateID
+            and
+            cml.ChargeMListID=cfi.ChargeMListID
+            and
+            cfi.RmId=rd.RmId
+            and
+            cfi.CBillItemID=cbi.CBillItemID
+            and
+            (cml.EstateID={estate_id} and cbi.ItemName='{types}' and rd.RmNo='{room_no}' and cfi.EDate>='{end_date}')
+        order by cfi.ChargeFeeItemID desc;
+        """
+        return self.get_data_set(sql=sql)
