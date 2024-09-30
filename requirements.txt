@@ -1,0 +1,12 @@
+guolei-py3-requests
+addict
+retrying
+requests
+diskcache
+redis
+jsonschema
+xmltodict
+beautifulsoup4
+setuptools
+lxml
+wheel

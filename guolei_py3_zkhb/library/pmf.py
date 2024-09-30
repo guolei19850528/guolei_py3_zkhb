@@ -11,48 +11,44 @@ Github：https://github.com/guolei19850528/guolei_py3_zkhb
 from types import NoneType
 from typing import Callable, Union, Any, Sequence
 
+import requests
 import xmltodict
 from addict import Dict
 from bs4 import BeautifulSoup
-from guolei_py3_requests.library import ResponseCallable, request
-from jsonschema.validators import Draft202012Validator
 from requests import Response
 
 
-class ResponseCallable(ResponseCallable):
+class ResponseCallable(object):
     """
     Response Callable Class
     """
 
     @staticmethod
-    def text_xml(response: Response = None, status_code: int = 200, features: Union[str, Sequence[str]] = "xml"):
-        return BeautifulSoup(
-            ResponseCallable.text(response=response, status_code=status_code),
-            features="xml"
-        )
-
-    @staticmethod
-    def text_xml__new_data_set__table(
+    def xml_new_data_set_table(
             response: Response = None,
             status_code: int = 200,
             features: Union[str, Sequence[str]] = "xml"
     ):
-        text_xml = ResponseCallable.text_xml(response=response, status_code=status_code, features=features)
-        if isinstance(text_xml, NoneType):
-            return []
-        results = Dict(
-            xmltodict.parse(
-                text_xml.find("NewDataSet").encode(
-                    "utf-8"))
-        ).NewDataSet.Table
-        if isinstance(results, list):
-            return results
-        if isinstance(results, dict) and len(results.keys()):
-            return [results]
+        if response.status_code == status_code:
+            xml_doc = BeautifulSoup(
+                response.text,
+                features=features
+            )
+            if isinstance(xml_doc, NoneType):
+                return []
+            results = Dict(
+                xmltodict.parse(
+                    xml_doc.find("NewDataSet").encode(
+                        "utf-8"))
+            ).NewDataSet.Table
+            if isinstance(results, list):
+                return results
+            if isinstance(results, dict) and len(results.keys()):
+                return [results]
         return []
 
 
-class UrlsSetting:
+class UrlSetting(object):
     GET_DATA_SET = "/estate/webService/ForcelandEstateService.asmx?op=GetDataSet"
 
 
@@ -72,52 +68,52 @@ class Api(object):
     def base_url(self, base_url: str):
         self._base_url = base_url
 
-    def post(
-            self,
-            response_callable: Callable = ResponseCallable.text_xml__new_data_set__table,
-            url: str = None,
-            params: Any = None,
-            data: Any = None,
-            json: Any = None,
-            headers: Any = None,
-            **kwargs: Any
-    ):
-        return self.request(
-            response_callable=response_callable,
-            method="POST",
-            url=url,
-            params=params,
-            data=data,
-            json=json,
-            headers=headers,
-            **kwargs
-        )
+    def post(self, on_response_callback: Callable = None, path: str = None,
+             **kwargs):
+        """
+        execute post by requests.post
 
-    def request(
-            self,
-            response_callable: Callable = ResponseCallable.text_xml__new_data_set__table,
-            method: str = "GET",
-            url: str = None,
-            params: Any = None,
-            headers: Any = None,
-            **kwargs
-    ):
-        if not Draft202012Validator({"type": "string", "minLength": 1, "pattern": "^http"}).is_valid(url):
-            url = f"/{url}" if not url.startswith("/") else url
-            url = f"{self.base_url}{url}"
-        return request(
-            response_callable=response_callable,
-            method=method,
-            url=url,
-            params=params,
-            headers=headers,
-            **kwargs
-        )
+        params.setdefault("key", self.key)
+
+        :param on_response_callback: response callback
+        :param path: if url is None: url=f"{self.base_url}{path}"
+        :param kwargs: requests.get(**kwargs)
+        :return: on_response_callback(response) or response
+        """
+        path = kwargs.get("url", None) or f"{self.base_url}{path}"
+        kwargs.update([
+            ("url", path),
+        ])
+        response = requests.post(**kwargs)
+        if isinstance(on_response_callback, Callable):
+            return on_response_callback(response)
+        return response
+
+    def request(self, on_response_callback: Callable = None, path: str = None,
+                **kwargs):
+        """
+        execute request by requests.request
+
+        params.setdefault("key", self.key)
+
+        :param on_response_callback: response callback
+        :param path: if url is None: url=f"{self.base_url}{path}"
+        :param kwargs: requests.get(**kwargs)
+        :return: on_response_callback(response) or response
+        """
+        path = kwargs.get("url", None) or f"{self.base_url}{path}"
+        kwargs.update([
+            ("url", path),
+        ])
+        response = requests.request(**kwargs)
+        if isinstance(on_response_callback, Callable):
+            return on_response_callback(response)
+        return response
 
     def get_data_set(
-            self, sql: str = None,
-            url: str = None,
-            response_callable: Callable = ResponseCallable.text_xml__new_data_set__table
+            self,
+            sql: str = None,
+            url: str = None
     ):
         data = xmltodict.unparse(
             {
@@ -136,8 +132,8 @@ class Api(object):
             }
         )
         return self.post(
-            response_callable=response_callable,
-            url=UrlsSetting.GET_DATA_SET,
+            on_response_callback=ResponseCallable.xml_new_data_set_table,
+            path=UrlSetting.GET_DATA_SET,
             data=data,
             headers={"Content-Type": "text/xml; charset=utf-8"}
         )
