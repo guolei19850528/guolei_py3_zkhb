@@ -15,10 +15,11 @@ import requests
 import xmltodict
 from addict import Dict
 from bs4 import BeautifulSoup
+from guolei_py3_requests.library import ResponseCallback, Request
 from requests import Response
 
 
-class ResponseCallable(object):
+class ResponseCallback(ResponseCallback):
     """
     Response Callable Class
     """
@@ -36,6 +37,7 @@ class ResponseCallable(object):
             )
             if isinstance(xml_doc, NoneType):
                 return []
+
             results = Dict(
                 xmltodict.parse(
                     xml_doc.find("NewDataSet").encode(
@@ -52,7 +54,7 @@ class UrlSetting(object):
     GET_DATA_SET = "/estate/webService/ForcelandEstateService.asmx?op=GetDataSet"
 
 
-class Api(object):
+class Api(Request):
     """
     中科华博物管收费系统API Class
     """
@@ -80,35 +82,9 @@ class Api(object):
         :param kwargs: requests.get(**kwargs)
         :return: on_response_callback(response) or response
         """
-        path = kwargs.get("url", None) or f"{self.base_url}{path}"
-        kwargs.update([
-            ("url", path),
-        ])
-        response = requests.post(**kwargs)
-        if isinstance(on_response_callback, Callable):
-            return on_response_callback(response)
-        return response
-
-    def request(self, on_response_callback: Callable = None, path: str = None,
-                **kwargs):
-        """
-        execute request by requests.request
-
-        params.setdefault("key", self.key)
-
-        :param on_response_callback: response callback
-        :param path: if url is None: url=f"{self.base_url}{path}"
-        :param kwargs: requests.get(**kwargs)
-        :return: on_response_callback(response) or response
-        """
-        path = kwargs.get("url", None) or f"{self.base_url}{path}"
-        kwargs.update([
-            ("url", path),
-        ])
-        response = requests.request(**kwargs)
-        if isinstance(on_response_callback, Callable):
-            return on_response_callback(response)
-        return response
+        kwargs = Dict(kwargs)
+        kwargs.url = f"{self.base_url}{path}"
+        return super().post(on_response_callback=on_response_callback, **kwargs.to_dict())
 
     def get_data_set(
             self,
@@ -132,7 +108,7 @@ class Api(object):
             }
         )
         return self.post(
-            on_response_callback=ResponseCallable.xml_new_data_set_table,
+            on_response_callback=ResponseCallback.xml_new_data_set_table,
             path=UrlSetting.GET_DATA_SET,
             data=data,
             headers={"Content-Type": "text/xml; charset=utf-8"}
