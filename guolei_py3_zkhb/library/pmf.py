@@ -60,6 +60,7 @@ class Api(Request):
     """
 
     def __init__(self, base_url: str = ""):
+        super().__init__()
         self._base_url = base_url
 
     @property
